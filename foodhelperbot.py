@@ -1,28 +1,31 @@
 import os
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
+from telegram.ext import (
+    ApplicationBuilder,
+    MessageHandler,
+    CommandHandler,
+    ContextTypes,
+    filters
+)
 from openai import OpenAI
 
 
-# ====== 1. Читаем переменные окружения ======
+# ====== ENV ======
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not TELEGRAM_TOKEN:
-    raise RuntimeError("❌ Не найдена переменная TELEGRAM_TOKEN")
+    raise RuntimeError("TELEGRAM_TOKEN not set")
 
 if not OPENAI_API_KEY:
-    raise RuntimeError("❌ Не найдена переменная OPENAI_API_KEY")
+    raise RuntimeError("OPENAI_API_KEY not set")
 
 
-# ====== 2. OpenAI client ======
+# ====== OpenAI client ======
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
-
-
-
-# ====== 2. СИСТЕМНЫЙ ПРОМПТ (ТВОЙ ПРОМПТ) ======
+# ====== SYSTEM PROMPT ======
 SYSTEM_PROMPT = """
 🔥 УНИВЕРСАЛЬНЫЙ ПРОМПТ ДЛЯ ВЕДЕНИЯ ПИТАНИЯ И ТЕЛА
 
@@ -158,29 +161,65 @@ Hard-режим
 """
 
 
+# ====== LIMITS ======
+MAX_HISTORY = 100
+
+
+# ====== COMMANDS ======
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    context.user_data["history"] = []
+
+    await update.message.reply_text(
+        "Я твой гастрономический ассистент.\n\n"
+        "Работаем по фактам и цифрам.\n\n"
+        "Начнём.\n"
+        "Ответь:\n"
+        "1️⃣ Пол и возраст?"
+    )
+
+
+# ====== MESSAGE HANDLER ======
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
 
+    history = context.user_data.setdefault("history", [])
+
+    # сохраняем сообщение пользователя
+    history.append({"role": "user", "content": user_text})
+
+    # ограничиваем историю
+    if len(history) > MAX_HISTORY:
+        history[:] = history[-MAX_HISTORY:]
+
     try:
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            *history
+        ]
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_text}
-            ]
+            messages=messages
         )
 
         reply = response.choices[0].message.content
+
+        # сохраняем ответ ассистента
+        history.append({"role": "assistant", "content": reply})
+
         await update.message.reply_text(reply)
 
     except Exception as e:
-        print("Ошибка OpenAI:", e)
+        print("OpenAI error:", e)
         await update.message.reply_text("Произошла ошибка. Попробуй позже.")
 
 
-# ====== 5. Запуск бота ======
+# ====== START BOT ======
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("Bot started successfully")
