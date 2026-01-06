@@ -1,21 +1,22 @@
-from openai import OpenAI
-
-client = OpenAI(api_key=OPENAI_API_KEY)
 import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
-
+from openai import OpenAI
 
 
 # ====== 1. Читаем переменные окружения ======
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if TELEGRAM_TOKEN is None:
+if not TELEGRAM_TOKEN:
     raise RuntimeError("❌ Не найдена переменная TELEGRAM_TOKEN")
 
-if OPENAI_API_KEY is None:
+if not OPENAI_API_KEY:
     raise RuntimeError("❌ Не найдена переменная OPENAI_API_KEY")
+
+
+# ====== 2. OpenAI client ======
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 
@@ -157,27 +158,27 @@ Hard-режим
 """
 
 
-# ====== 3. Обработчик сообщений ======
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
 
     try:
         response = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=[
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_text}
-    ]
-)
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_text}
+            ]
+        )
 
-reply = response.choices[0].message.content
+        reply = response.choices[0].message.content
         await update.message.reply_text(reply)
 
-    except Exception:
+    except Exception as e:
+        print("Ошибка OpenAI:", e)
         await update.message.reply_text("Произошла ошибка. Попробуй позже.")
 
 
-# ====== 4. Запуск бота ======
+# ====== 5. Запуск бота ======
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
