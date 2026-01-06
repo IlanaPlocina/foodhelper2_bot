@@ -1,7 +1,10 @@
+from openai import OpenAI
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
-import openai
+
 
 
 # ====== 1. Читаем переменные окружения ======
@@ -14,7 +17,7 @@ if TELEGRAM_TOKEN is None:
 if OPENAI_API_KEY is None:
     raise RuntimeError("❌ Не найдена переменная OPENAI_API_KEY")
 
-openai.api_key = OPENAI_API_KEY
+
 
 
 
@@ -159,15 +162,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
 
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_text}
-            ]
-        )
+        response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_text}
+    ]
+)
 
-        reply = response["choices"][0]["message"]["content"]
+reply = response.choices[0].message.content
         await update.message.reply_text(reply)
 
     except Exception:
